@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # TikTok Auto DM 🤖
 
 > **Delete TikTok. Keep your streaks.**
@@ -20,8 +21,8 @@ Are you stuck in a doomscrolling loop on TikTok but too afraid to delete the app
 
 ```
 tiktok_auto_streak/
-├── main.py
-├── tiktok_dmm.py
+├── DOCKERFILE
+├── tiktok_dm.py
 ├── requirements.txt
 └── README.md
 ```
@@ -78,3 +79,6 @@ The program will automatically open Chrome, log in to TikTok, and send the messa
 ## Disclaimer
 
 This tool is intended for personal use only. Use responsibly and in accordance with TikTok's Terms of Service.
+=======
+# tiktok_autodm_v2-
+>>>>>>> 7f14b5b86dc2d44a7bb30403785e3b62606c81d4
