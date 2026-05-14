@@ -1,748 +1,1420 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>STREAK BOT — TikTok Auto DM</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&display=swap" rel="stylesheet"/>
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root {
-    --black:  #0a0a0a;
-    --white:  #f5f0e8;
-    --yellow: #FFE600;
-    --pink:   #FF3CAC;
-    --blue:   #00D4FF;
-    --green:  #00FF88;
-    --red:    #FF4545;
-    --border: 3px solid var(--black);
-    --shadow: 5px 5px 0px var(--black);
-    --shadow-lg: 8px 8px 0px var(--black);
-  }
-
-  body { background: var(--white); color: var(--black); font-family: 'Space Mono', monospace; min-height: 100vh; overflow-x: hidden; }
-
-  /* ── HEADER ── */
-  header {
-    background: var(--black); color: var(--yellow);
-    padding: 20px 40px;
-    display: flex; align-items: center; justify-content: space-between;
-    border-bottom: 4px solid var(--yellow);
-    position: sticky; top: 0; z-index: 100;
-    gap: 16px; flex-wrap: wrap;
-  }
-  header h1 { font-family: 'Bebas Neue', sans-serif; font-size: 2.2rem; letter-spacing: 4px; color: var(--yellow); }
-  .header-right { display: flex; align-items: center; gap: 12px; }
-
-  .badge {
-    background: var(--pink); color: var(--white);
-    font-size: 0.7rem; padding: 4px 12px;
-    border: 2px solid var(--white); font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
-    animation: blink 1.5s step-end infinite;
-  }
-  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-
-  /* Session pill */
-  .session-pill {
-    font-size: 0.65rem; font-weight: 700; letter-spacing: 1px; padding: 4px 10px;
-    border: 2px solid var(--white); text-transform: uppercase; cursor: default;
-    display: flex; align-items: center; gap: 6px;
-  }
-  .session-pill.active   { background: var(--green); color: var(--black); }
-  .session-pill.inactive { background: #444; color: #aaa; }
-  .session-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-
-  /* ── MAIN LAYOUT ── */
-  main { max-width: 1100px; margin: 0 auto; padding: 40px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
-  @media (max-width: 768px) { main { grid-template-columns: 1fr; } header h1 { font-size: 1.5rem; } }
-
-  /* ── CARD ── */
-  .card { background: var(--white); border: var(--border); box-shadow: var(--shadow-lg); padding: 28px; position: relative; }
-  .card-title {
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 3px;
-    margin-bottom: 20px; padding-bottom: 12px; border-bottom: 3px solid var(--black);
-    display: flex; align-items: center; gap: 10px;
-  }
-  .card-title .dot { width: 14px; height: 14px; background: var(--yellow); border: 2px solid var(--black); display: inline-block; }
-
-  /* ── FORM ── */
-  .form-group { margin-bottom: 16px; }
-  label { display: block; font-size: 0.72rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
-
-  input[type="text"], input[type="password"], input[type="email"], textarea {
-    width: 100%; padding: 10px 14px; border: var(--border); background: var(--white);
-    font-family: 'Space Mono', monospace; font-size: 0.85rem; color: var(--black);
-    outline: none; transition: box-shadow 0.1s; box-shadow: 3px 3px 0 var(--black);
-  }
-  input.field-error { border-color: var(--red); box-shadow: 3px 3px 0 var(--red); animation: shake 0.35s ease; }
-  @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 60%{transform:translateX(6px)} }
-  input:focus, textarea:focus { box-shadow: 5px 5px 0 var(--pink); }
-  textarea { resize: vertical; min-height: 90px; }
-
-  /* ── CREDENTIAL SAVE POPUP ── */
-  #cred-overlay {
-    position: fixed; inset: 0; background: rgba(10,10,10,0.72);
-    z-index: 999; display: flex; align-items: center; justify-content: center;
-    padding: 20px; backdrop-filter: blur(2px);
-  }
-  #cred-popup {
-    background: var(--white); border: var(--border); box-shadow: 12px 12px 0 var(--black);
-    max-width: 420px; width: 100%; padding: 30px; position: relative;
-    animation: popIn 0.2s ease-out;
-  }
-  @keyframes popIn { from{transform:scale(0.9) translateY(16px);opacity:0} to{transform:scale(1) translateY(0);opacity:1} }
-  #cred-popup .popup-icon { font-size: 2.4rem; text-align: center; margin-bottom: 10px; }
-  #cred-popup .popup-title { font-family:'Bebas Neue',sans-serif; font-size:1.7rem; letter-spacing:3px; text-align:center; margin-bottom:6px; }
-  #cred-popup .popup-sub { font-size:0.7rem; letter-spacing:1.5px; color:#555; text-align:center; margin-bottom:18px; line-height:1.8; }
-  #cred-popup .cred-preview {
-    background: var(--black); color: var(--green); border: var(--border);
-    padding: 12px 16px; font-size:0.73rem; margin-bottom:18px; line-height:2;
-  }
-  #cred-popup .cred-preview .lbl { color: var(--yellow); font-weight:700; }
-  #cred-popup .cred-preview .dim { color:#666; }
-  .popup-btn-row { display:flex; gap:10px; }
-  .btn-popup-yes {
-    flex:1; background:var(--yellow); color:var(--black); border:var(--border);
-    padding:13px; font-family:'Bebas Neue',sans-serif; font-size:1.1rem; letter-spacing:2px;
-    cursor:pointer; box-shadow:var(--shadow); transition:transform 0.1s,box-shadow 0.1s;
-  }
-  .btn-popup-yes:hover { transform:translate(-2px,-2px); box-shadow:7px 7px 0 var(--black); }
-  .btn-popup-no {
-    flex:1; background:var(--white); color:var(--black); border:var(--border);
-    padding:13px; font-family:'Bebas Neue',sans-serif; font-size:1.1rem; letter-spacing:2px;
-    cursor:pointer; box-shadow:var(--shadow); transition:transform 0.1s,box-shadow 0.1s;
-  }
-  .btn-popup-no:hover { transform:translate(-2px,-2px); box-shadow:7px 7px 0 var(--black); }
-  .btn-close-popup { position:absolute; top:10px; right:14px; background:none; border:none; font-size:1.1rem; cursor:pointer; color:#aaa; font-weight:700; }
-  .btn-close-popup:hover { color:var(--black); }
-
-  /* ── SAVED CRED BANNER ── */
-  #cred-saved-banner {
-    display:none; padding:10px 14px; border:var(--border); margin-bottom:16px;
-    background:#e8f4ff; border-color:#0077cc;
-    font-size:0.72rem; font-weight:700; letter-spacing:1px; line-height:1.7;
-  }
-  #cred-saved-banner.visible { display:block; }
-  .btn-forget-cred {
-    background:none; border:2px solid #0055aa; color:#0055aa;
-    padding:4px 10px; font-family:'Space Mono',monospace; font-size:0.63rem;
-    font-weight:700; letter-spacing:1px; cursor:pointer; text-transform:uppercase;
-    margin-top:8px; transition:background 0.15s,color 0.15s;
-  }
-  .btn-forget-cred:hover { background:#0055aa; color:var(--white); }
-
-  /* ── TOAST ── */
-  #toast {
-    position:fixed; bottom:28px; right:28px; background:var(--black); color:var(--white);
-    border:3px solid var(--yellow); box-shadow:6px 6px 0 var(--black);
-    padding:12px 18px; font-size:0.75rem; letter-spacing:1px; z-index:9999;
-    max-width:300px; transform:translateY(80px); opacity:0;
-    transition:transform 0.3s ease,opacity 0.3s ease; pointer-events:none;
-  }
-  #toast.show { transform:translateY(0); opacity:1; }
-
-  /* ── SESSION BANNER ── */
-  .session-banner {
-    display: none; padding: 10px 14px; border: var(--border); margin-bottom: 16px;
-    font-size: 0.72rem; font-weight: 700; letter-spacing: 1px; line-height: 1.6;
-  }
-  .session-banner.ok   { background: #d4ffec; border-color: #00cc66; display: block; }
-  .session-banner.warn { background: #fff3cd; border-color: #cc8800; display: block; }
-
-  /* ── LOGIN ERROR BANNER ── */
-  .login-error-banner {
-    display: none; background: var(--red); color: var(--white);
-    border: var(--border); box-shadow: var(--shadow); padding: 12px 16px;
-    margin-bottom: 16px; font-size: 0.78rem; font-weight: 700; letter-spacing: 1px; line-height: 1.6;
-    animation: fadeIn 0.3s ease;
-  }
-  .login-error-banner.visible { display: block; }
-  @keyframes fadeIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
-
-  /* ── PASSWORD WRAPPER ── */
-  .password-wrap { position: relative; display: flex; }
-  .password-wrap input { padding-right: 50px; }
-  .btn-eye {
-    position: absolute; right: 0; top: 0; height: 100%; width: 46px;
-    background: var(--black); border: var(--border); border-left: none;
-    color: var(--yellow); cursor: pointer; font-size: 1.1rem;
-    display: flex; align-items: center; justify-content: center; transition: background 0.15s; flex-shrink: 0;
-  }
-  .btn-eye:hover { background: #333; }
-
-  /* ── CLEAR SESSION BUTTON ── */
-  .btn-clear-session {
-    background: none; border: 2px solid #cc4400; color: #cc4400;
-    padding: 5px 10px; font-family: 'Space Mono', monospace; font-size: 0.65rem;
-    font-weight: 700; letter-spacing: 1px; cursor: pointer; text-transform: uppercase;
-    transition: background 0.15s, color 0.15s;
-  }
-  .btn-clear-session:hover { background: #cc4400; color: var(--white); }
-
-  /* ── USERNAME LIST ── */
-  .username-toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
-  .username-input-row { display: flex; gap: 8px; margin-bottom: 10px; }
-  .username-input-row input { flex: 1; }
-
-  .btn-add {
-    background: var(--yellow); border: var(--border); padding: 10px 16px;
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: 1px;
-    cursor: pointer; box-shadow: 3px 3px 0 var(--black); transition: transform 0.1s, box-shadow 0.1s; white-space: nowrap;
-  }
-  .btn-add:hover  { transform: translate(-2px,-2px); box-shadow: 5px 5px 0 var(--black); }
-  .btn-add:active { transform: translate(2px,2px);   box-shadow: 1px 1px 0 var(--black); }
-
-  .btn-sm {
-    background: var(--black); color: var(--white); border: var(--border);
-    padding: 7px 12px; font-family: 'Bebas Neue', sans-serif; font-size: 0.9rem; letter-spacing: 1px;
-    cursor: pointer; box-shadow: 3px 3px 0 var(--black); transition: transform 0.1s, box-shadow 0.1s; white-space: nowrap;
-  }
-  .btn-sm:hover  { transform: translate(-1px,-1px); box-shadow: 4px 4px 0 var(--black); }
-  .btn-sm:active { transform: translate(1px,1px);   box-shadow: 1px 1px 0 var(--black); }
-  .btn-sm.danger { background: var(--red); }
-  .btn-sm.blue   { background: var(--blue); color: var(--black); }
-
-  #username-list {
-    display: flex; flex-wrap: wrap; gap: 8px; min-height: 40px; padding: 10px;
-    border: var(--border); background: #f0ebe0; box-shadow: inset 2px 2px 0 rgba(0,0,0,0.1);
-  }
-  .username-tag {
-    background: var(--black); color: var(--yellow); padding: 4px 10px;
-    font-size: 0.75rem; font-weight: 700; letter-spacing: 1px;
-    display: flex; align-items: center; gap: 8px; border: 2px solid var(--black);
-  }
-  .username-tag button { background: none; border: none; color: var(--pink); cursor: pointer; font-size: 1rem; padding: 0; font-weight: 700; }
-
-  /* save checkbox */
-  .save-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.72rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; }
-  .save-row input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--pink); }
-
-  /* ── ACTION BUTTONS ── */
-  .btn-row { display: flex; gap: 12px; margin-top: 20px; }
-
-  .btn-send {
-    flex: 1; background: var(--pink); color: var(--white); border: var(--border);
-    padding: 16px; font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 3px;
-    cursor: pointer; box-shadow: var(--shadow-lg); transition: transform 0.1s, box-shadow 0.1s;
-  }
-  .btn-send:hover:not(:disabled)  { transform: translate(-3px,-3px); box-shadow: 11px 11px 0 var(--black); }
-  .btn-send:active:not(:disabled) { transform: translate(3px,3px);   box-shadow: 2px 2px 0 var(--black); }
-  .btn-send:disabled { background: #aaa; cursor: not-allowed; box-shadow: 3px 3px 0 #555; }
-
-  /* ── STATUS PANEL ── */
-  .status-panel { grid-column: span 2; }
-  @media (max-width: 768px) { .status-panel { grid-column: span 1; } }
-
-  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
-  .stat-box  { border: var(--border); padding: 16px; text-align: center; box-shadow: var(--shadow); }
-  .stat-box.yellow { background: var(--yellow); }
-  .stat-box.pink   { background: var(--pink); color: var(--white); }
-  .stat-box.blue   { background: var(--blue); }
-  .stat-num   { font-family: 'Bebas Neue', sans-serif; font-size: 2.5rem; letter-spacing: 2px; line-height: 1; }
-  .stat-label { font-size: 0.65rem; letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; font-weight: 700; }
-
-  /* ── LOG ── */
-  .log-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-  .log-toolbar span { font-size: 0.7rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
-
-  #log-box {
-    background: var(--black); color: var(--white); padding: 16px;
-    min-height: 160px; max-height: 260px; overflow-y: auto;
-    font-size: 0.8rem; border: var(--border); box-shadow: inset 2px 2px 0 #333; line-height: 1.8;
-  }
-  #log-box .log-ok     { color: #00FF88; }
-  #log-box .log-fail   { color: var(--pink); }
-  #log-box .log-warn   { color: var(--yellow); }
-  #log-box .log-info   { color: var(--blue); }
-  #log-box .log-session{ color: #aaffcc; }
-
-  /* ── PROGRESS BAR ── */
-  .progress-wrap { border: var(--border); background: #ddd; height: 24px; margin-bottom: 16px; box-shadow: var(--shadow); overflow: hidden; }
-  #progress-bar  {
-    height: 100%; width: 0%; transition: width 0.5s;
-    background: repeating-linear-gradient(45deg, var(--yellow), var(--yellow) 10px, var(--black) 10px, var(--black) 20px);
-  }
-
-  /* ── CURRENT STATUS ── */
-  .current-tag {
-    display: inline-block; background: var(--blue); border: var(--border);
-    padding: 4px 12px; font-size: 0.75rem; font-weight: 700; letter-spacing: 1px;
-    margin-bottom: 12px; box-shadow: 3px 3px 0 var(--black);
-  }
-
-  /* ── TICKER ── */
-  .ticker { background: var(--yellow); border-top: 3px solid var(--black); border-bottom: 3px solid var(--black); padding: 8px 0; overflow: hidden; white-space: nowrap; }
-  .ticker-inner { display: inline-block; animation: ticker 18s linear infinite; font-family: 'Bebas Neue', sans-serif; font-size: 1rem; letter-spacing: 4px; color: var(--black); }
-  @keyframes ticker { 0%{transform:translateX(100vw)} 100%{transform:translateX(-100%)} }
-
-  .hint { font-size: 0.65rem; color: #666; margin-top: 4px; letter-spacing: 1px; }
-</style>
-</head>
-<body>
-
-<!-- popup removed: credentials now auto-saved to server + localStorage -->
-
-<!-- ── TOAST ── -->
-<div id="toast"></div>
-
-<header>
-  <h1>// STREAK_BOT</h1>
-  <div class="header-right">
-    <div class="session-pill inactive" id="session-pill">
-      <span class="dot"></span> <span id="session-label">NO SESSION</span>
-    </div>
-    <span class="badge" id="header-status">IDLE</span>
-  </div>
-</header>
-
-<div class="ticker">
-  <span class="ticker-inner">
-    DELETE TIKTOK &nbsp;★&nbsp; KEEP YOUR STREAKS &nbsp;★&nbsp;
-    AUTOMATED DM &nbsp;★&nbsp; NO MORE DOOMSCROLLING &nbsp;★&nbsp;
-    DELETE TIKTOK &nbsp;★&nbsp; KEEP YOUR STREAKS &nbsp;★&nbsp;
-    AUTOMATED DM &nbsp;★&nbsp; NO MORE DOOMSCROLLING &nbsp;★&nbsp;
-  </span>
-</div>
-
-<main>
-
-  <!-- ── CREDENTIALS ── -->
-  <div class="card">
-    <div class="card-title"><span class="dot"></span> CREDENTIALS</div>
-
-    <!-- Session active notice -->
-    <div class="session-banner ok" id="session-banner-ok" style="display:none">
-      🔑 Saved session found (saved <span id="session-date">—</span>).<br>
-      Login will be skipped automatically.
-      <br><button class="btn-clear-session" onclick="clearSession()" style="margin-top:8px">✕ Clear Session</button>
-    </div>
-
-    <!-- Login error -->
-    <div class="login-error-banner" id="login-error-banner">
-      ✗ LOGIN FAILED — Wrong email or password.<br>
-      Please re-enter your credentials and try again.
-    </div>
-
-    <!-- Saved credentials notice -->
-    <div id="cred-saved-banner">
-      💾 Saved credentials found — fields pre-filled automatically.<br>
-      <button class="btn-forget-cred" onclick="forgetCredentials()">✕ Forget saved credentials</button>
-    </div>
-
-    <div class="form-group">
-      <label>TikTok Email</label>
-      <input type="email" id="email" placeholder="you@gmail.com" autocomplete="email" />
-    </div>
-
-    <div class="form-group">
-      <label>Password</label>
-      <div class="password-wrap">
-        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
-        <button class="btn-eye" id="eye-btn" onclick="togglePassword()" title="Show / hide password">👁</button>
-      </div>
-      <p class="hint">Click the eye icon to show / hide your password</p>
-      <label class="save-row" style="margin-top:10px">
-        <input type="checkbox" id="save-credentials" checked />
-        Remember email &amp; password (server + browser)
-      </label>
-    </div>
-
-    <div class="form-group">
-      <label>Message</label>
-      <textarea id="message" placeholder="STREAK BOT AUTO DM — still here!"></textarea>
-      <p class="hint" id="char-count">0 characters</p>
-    </div>
-  </div>
-
-  <!-- ── TARGET ACCOUNTS ── -->
-  <div class="card">
-    <div class="card-title"><span class="dot" style="background:var(--pink)"></span> TARGET ACCOUNTS</div>
-
-    <div class="form-group">
-      <label>Add Username (without @)</label>
-      <div class="username-input-row">
-        <input type="text" id="username-input" placeholder="e.g. zou_8u" />
-        <button class="btn-add" onclick="addUsername()">+ ADD</button>
-      </div>
-      <p class="hint">Press Enter or click +ADD to add a username</p>
-    </div>
-
-    <!-- Toolbar: load saved / clear list -->
-    <div class="username-toolbar">
-      <button class="btn-sm blue" onclick="loadSavedUsernames()" title="Load previously saved username list">↓ LOAD SAVED</button>
-      <button class="btn-sm danger" onclick="clearList()" title="Remove all usernames from the list">✕ CLEAR LIST</button>
-    </div>
-
-    <label>Queue (<span id="count">0</span> accounts)</label>
-    <div id="username-list"></div>
-
-    <!-- Save checkbox -->
-    <label class="save-row">
-      <input type="checkbox" id="save-usernames" checked />
-      Save this list for next time
-    </label>
-
-    <div class="btn-row">
-      <button class="btn-send" id="send-btn" onclick="startSend()">▶ SEND DM</button>
-    </div>
-  </div>
-
-  <!-- ── STATUS PANEL ── -->
-  <div class="card status-panel">
-    <div class="card-title"><span class="dot" style="background:var(--blue)"></span> LIVE STATUS</div>
-
-    <div class="stats-row">
-      <div class="stat-box yellow">
-        <div class="stat-num" id="stat-total">0</div>
-        <div class="stat-label">Total Targets</div>
-      </div>
-      <div class="stat-box pink">
-        <div class="stat-num" id="stat-success">0</div>
-        <div class="stat-label">Sent</div>
-      </div>
-      <div class="stat-box blue">
-        <div class="stat-num" id="stat-failed">0</div>
-        <div class="stat-label">Failed</div>
-      </div>
-    </div>
-
-    <div class="progress-wrap"><div id="progress-bar"></div></div>
-
-    <div id="current-wrap" style="display:none">
-      <span class="current-tag">SENDING TO: <span id="current-user">—</span></span>
-    </div>
-
-    <!-- Log toolbar -->
-    <div class="log-toolbar">
-      <span>// CONSOLE LOG</span>
-      <button class="btn-sm" onclick="exportLog()" title="Download full log file">↓ EXPORT LOG</button>
-    </div>
-    <div id="log-box"><span class="log-info">// waiting for job to start...</span></div>
-  </div>
-
-</main>
-
-<script>
-  const usernames = [];
-  let polling     = null;
-  let totalTargets = 0;
-  let passwordVisible = false;
-
-  // ── On load ──
-  window.addEventListener('DOMContentLoaded', () => {
-    checkSession();
-    loadSavedCredentials();   // try server first, then localStorage fallback
-    document.getElementById('message').addEventListener('input', function () {
-      document.getElementById('char-count').textContent = this.value.length + ' characters';
-    });
-    document.getElementById('username-input').addEventListener('keydown', e => {
-      if (e.key === 'Enter') addUsername();
-    });
-  });
-
-  // ── Credential save / load ─────────────────────────────
-  // Priority: server file → localStorage (fallback)
-  const CRED_KEY = 'streakbot_credentials';
-  let toastTimer = null;
-
-  async function loadSavedCredentials() {
-    // 1. Try server-side credentials first
-    try {
-      const res  = await fetch('/credentials');
-      const data = await res.json();
-      if (data.has_credentials && data.email) {
-        document.getElementById('email').value    = data.email;
-        document.getElementById('password').value = data.password || '';
-        document.getElementById('cred-saved-banner').classList.add('visible');
-        return;   // server data loaded — done
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>STREAK BOT — TikTok Auto DM</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
       }
-    } catch (_) {}
 
-    // 2. Fallback to localStorage
-    try {
-      const raw = localStorage.getItem(CRED_KEY);
-      if (!raw) return;
-      const { email, password } = JSON.parse(raw);
-      if (email)    document.getElementById('email').value    = email;
-      if (password) document.getElementById('password').value = password;
-      document.getElementById('cred-saved-banner').classList.add('visible');
-    } catch (_) {}
-  }
+      :root {
+        --black: #0a0a0a;
+        --white: #f5f0e8;
+        --yellow: #ffe600;
+        --pink: #ff3cac;
+        --blue: #00d4ff;
+        --green: #00ff88;
+        --red: #ff4545;
+        --border: 3px solid var(--black);
+        --shadow: 5px 5px 0px var(--black);
+        --shadow-lg: 8px 8px 0px var(--black);
+      }
 
-  async function saveCredentials(email, password) {
-    // Save to server
-    try {
-      await fetch('/credentials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+      body {
+        background: var(--white);
+        color: var(--black);
+        font-family: "Space Mono", monospace;
+        min-height: 100vh;
+        overflow-x: hidden;
+      }
+
+      /* ── HEADER ── */
+      header {
+        background: var(--black);
+        color: var(--yellow);
+        padding: 20px 40px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 4px solid var(--yellow);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      header h1 {
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 2.2rem;
+        letter-spacing: 4px;
+        color: var(--yellow);
+      }
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .badge {
+        background: var(--pink);
+        color: var(--white);
+        font-size: 0.7rem;
+        padding: 4px 12px;
+        border: 2px solid var(--white);
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        animation: blink 1.5s step-end infinite;
+      }
+      @keyframes blink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0;
+        }
+      }
+
+      /* Session pill */
+      .session-pill {
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        padding: 4px 10px;
+        border: 2px solid var(--white);
+        text-transform: uppercase;
+        cursor: default;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .session-pill.active {
+        background: var(--green);
+        color: var(--black);
+      }
+      .session-pill.inactive {
+        background: #444;
+        color: #aaa;
+      }
+      .session-pill .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+
+      /* ── MAIN LAYOUT ── */
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 40px 24px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 32px;
+      }
+      @media (max-width: 768px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+        header h1 {
+          font-size: 1.5rem;
+        }
+      }
+
+      /* ── CARD ── */
+      .card {
+        background: var(--white);
+        border: var(--border);
+        box-shadow: var(--shadow-lg);
+        padding: 28px;
+        position: relative;
+      }
+      .card-title {
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 1.5rem;
+        letter-spacing: 3px;
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 3px solid var(--black);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .card-title .dot {
+        width: 14px;
+        height: 14px;
+        background: var(--yellow);
+        border: 2px solid var(--black);
+        display: inline-block;
+      }
+
+      /* ── FORM ── */
+      .form-group {
+        margin-bottom: 16px;
+      }
+      label {
+        display: block;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        margin-bottom: 6px;
+      }
+
+      input[type="text"],
+      input[type="password"],
+      input[type="email"],
+      textarea {
+        width: 100%;
+        padding: 10px 14px;
+        border: var(--border);
+        background: var(--white);
+        font-family: "Space Mono", monospace;
+        font-size: 0.85rem;
+        color: var(--black);
+        outline: none;
+        transition: box-shadow 0.1s;
+        box-shadow: 3px 3px 0 var(--black);
+      }
+      input.field-error {
+        border-color: var(--red);
+        box-shadow: 3px 3px 0 var(--red);
+        animation: shake 0.35s ease;
+      }
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        20% {
+          transform: translateX(-6px);
+        }
+        60% {
+          transform: translateX(6px);
+        }
+      }
+      input:focus,
+      textarea:focus {
+        box-shadow: 5px 5px 0 var(--pink);
+      }
+      textarea {
+        resize: vertical;
+        min-height: 90px;
+      }
+
+      /* ── CREDENTIAL SAVE POPUP ── */
+      #cred-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(10, 10, 10, 0.72);
+        z-index: 999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        backdrop-filter: blur(2px);
+      }
+      #cred-popup {
+        background: var(--white);
+        border: var(--border);
+        box-shadow: 12px 12px 0 var(--black);
+        max-width: 420px;
+        width: 100%;
+        padding: 30px;
+        position: relative;
+        animation: popIn 0.2s ease-out;
+      }
+      @keyframes popIn {
+        from {
+          transform: scale(0.9) translateY(16px);
+          opacity: 0;
+        }
+        to {
+          transform: scale(1) translateY(0);
+          opacity: 1;
+        }
+      }
+      #cred-popup .popup-icon {
+        font-size: 2.4rem;
+        text-align: center;
+        margin-bottom: 10px;
+      }
+      #cred-popup .popup-title {
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 1.7rem;
+        letter-spacing: 3px;
+        text-align: center;
+        margin-bottom: 6px;
+      }
+      #cred-popup .popup-sub {
+        font-size: 0.7rem;
+        letter-spacing: 1.5px;
+        color: #555;
+        text-align: center;
+        margin-bottom: 18px;
+        line-height: 1.8;
+      }
+      #cred-popup .cred-preview {
+        background: var(--black);
+        color: var(--green);
+        border: var(--border);
+        padding: 12px 16px;
+        font-size: 0.73rem;
+        margin-bottom: 18px;
+        line-height: 2;
+      }
+      #cred-popup .cred-preview .lbl {
+        color: var(--yellow);
+        font-weight: 700;
+      }
+      #cred-popup .cred-preview .dim {
+        color: #666;
+      }
+      .popup-btn-row {
+        display: flex;
+        gap: 10px;
+      }
+      .btn-popup-yes {
+        flex: 1;
+        background: var(--yellow);
+        color: var(--black);
+        border: var(--border);
+        padding: 13px;
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 1.1rem;
+        letter-spacing: 2px;
+        cursor: pointer;
+        box-shadow: var(--shadow);
+        transition:
+          transform 0.1s,
+          box-shadow 0.1s;
+      }
+      .btn-popup-yes:hover {
+        transform: translate(-2px, -2px);
+        box-shadow: 7px 7px 0 var(--black);
+      }
+      .btn-popup-no {
+        flex: 1;
+        background: var(--white);
+        color: var(--black);
+        border: var(--border);
+        padding: 13px;
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 1.1rem;
+        letter-spacing: 2px;
+        cursor: pointer;
+        box-shadow: var(--shadow);
+        transition:
+          transform 0.1s,
+          box-shadow 0.1s;
+      }
+      .btn-popup-no:hover {
+        transform: translate(-2px, -2px);
+        box-shadow: 7px 7px 0 var(--black);
+      }
+      .btn-close-popup {
+        position: absolute;
+        top: 10px;
+        right: 14px;
+        background: none;
+        border: none;
+        font-size: 1.1rem;
+        cursor: pointer;
+        color: #aaa;
+        font-weight: 700;
+      }
+      .btn-close-popup:hover {
+        color: var(--black);
+      }
+
+      /* ── SAVED CRED BANNER ── */
+      #cred-saved-banner {
+        display: none;
+        padding: 10px 14px;
+        border: var(--border);
+        margin-bottom: 16px;
+        background: #e8f4ff;
+        border-color: #0077cc;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        line-height: 1.7;
+      }
+      #cred-saved-banner.visible {
+        display: block;
+      }
+      .btn-forget-cred {
+        background: none;
+        border: 2px solid #0055aa;
+        color: #0055aa;
+        padding: 4px 10px;
+        font-family: "Space Mono", monospace;
+        font-size: 0.63rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        cursor: pointer;
+        text-transform: uppercase;
+        margin-top: 8px;
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+      .btn-forget-cred:hover {
+        background: #0055aa;
+        color: var(--white);
+      }
+
+      /* ── TOAST ── */
+      #toast {
+        position: fixed;
+        bottom: 28px;
+        right: 28px;
+        background: var(--black);
+        color: var(--white);
+        border: 3px solid var(--yellow);
+        box-shadow: 6px 6px 0 var(--black);
+        padding: 12px 18px;
+        font-size: 0.75rem;
+        letter-spacing: 1px;
+        z-index: 9999;
+        max-width: 300px;
+        transform: translateY(80px);
+        opacity: 0;
+        transition:
+          transform 0.3s ease,
+          opacity 0.3s ease;
+        pointer-events: none;
+      }
+      #toast.show {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      /* ── SESSION BANNER ── */
+      .session-banner {
+        display: none;
+        padding: 10px 14px;
+        border: var(--border);
+        margin-bottom: 16px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        line-height: 1.6;
+      }
+      .session-banner.ok {
+        background: #d4ffec;
+        border-color: #00cc66;
+        display: block;
+      }
+      .session-banner.warn {
+        background: #fff3cd;
+        border-color: #cc8800;
+        display: block;
+      }
+
+      /* ── LOGIN ERROR BANNER ── */
+      .login-error-banner {
+        display: none;
+        background: var(--red);
+        color: var(--white);
+        border: var(--border);
+        box-shadow: var(--shadow);
+        padding: 12px 16px;
+        margin-bottom: 16px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        line-height: 1.6;
+        animation: fadeIn 0.3s ease;
+      }
+      .login-error-banner.visible {
+        display: block;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(-6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* ── PASSWORD WRAPPER ── */
+      .password-wrap {
+        position: relative;
+        display: flex;
+      }
+      .password-wrap input {
+        padding-right: 50px;
+      }
+      .btn-eye {
+        position: absolute;
+        right: 0;
+        top: 0;
+        height: 100%;
+        width: 46px;
+        background: var(--black);
+        border: var(--border);
+        border-left: none;
+        color: var(--yellow);
+        cursor: pointer;
+        font-size: 1.1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s;
+        flex-shrink: 0;
+      }
+      .btn-eye:hover {
+        background: #333;
+      }
+
+      /* ── CLEAR SESSION BUTTON ── */
+      .btn-clear-session {
+        background: none;
+        border: 2px solid #cc4400;
+        color: #cc4400;
+        padding: 5px 10px;
+        font-family: "Space Mono", monospace;
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        cursor: pointer;
+        text-transform: uppercase;
+        transition:
+          background 0.15s,
+          color 0.15s;
+      }
+      .btn-clear-session:hover {
+        background: #cc4400;
+        color: var(--white);
+      }
+
+      /* ── USERNAME LIST ── */
+      .username-toolbar {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+      .username-input-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .username-input-row input {
+        flex: 1;
+      }
+
+      .btn-add {
+        background: var(--yellow);
+        border: var(--border);
+        padding: 10px 16px;
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 1.1rem;
+        letter-spacing: 1px;
+        cursor: pointer;
+        box-shadow: 3px 3px 0 var(--black);
+        transition:
+          transform 0.1s,
+          box-shadow 0.1s;
+        white-space: nowrap;
+      }
+      .btn-add:hover {
+        transform: translate(-2px, -2px);
+        box-shadow: 5px 5px 0 var(--black);
+      }
+      .btn-add:active {
+        transform: translate(2px, 2px);
+        box-shadow: 1px 1px 0 var(--black);
+      }
+
+      .btn-sm {
+        background: var(--black);
+        color: var(--white);
+        border: var(--border);
+        padding: 7px 12px;
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 0.9rem;
+        letter-spacing: 1px;
+        cursor: pointer;
+        box-shadow: 3px 3px 0 var(--black);
+        transition:
+          transform 0.1s,
+          box-shadow 0.1s;
+        white-space: nowrap;
+      }
+      .btn-sm:hover {
+        transform: translate(-1px, -1px);
+        box-shadow: 4px 4px 0 var(--black);
+      }
+      .btn-sm:active {
+        transform: translate(1px, 1px);
+        box-shadow: 1px 1px 0 var(--black);
+      }
+      .btn-sm.danger {
+        background: var(--red);
+      }
+      .btn-sm.blue {
+        background: var(--blue);
+        color: var(--black);
+      }
+
+      #username-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        min-height: 40px;
+        padding: 10px;
+        border: var(--border);
+        background: #f0ebe0;
+        box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.1);
+      }
+      .username-tag {
+        background: var(--black);
+        color: var(--yellow);
+        padding: 4px 10px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 2px solid var(--black);
+      }
+      .username-tag button {
+        background: none;
+        border: none;
+        color: var(--pink);
+        cursor: pointer;
+        font-size: 1rem;
+        padding: 0;
+        font-weight: 700;
+      }
+
+      /* save checkbox */
+      .save-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      .save-row input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        accent-color: var(--pink);
+      }
+
+      /* ── ACTION BUTTONS ── */
+      .btn-row {
+        display: flex;
+        gap: 12px;
+        margin-top: 20px;
+      }
+
+      .btn-send {
+        flex: 1;
+        background: var(--pink);
+        color: var(--white);
+        border: var(--border);
+        padding: 16px;
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 1.5rem;
+        letter-spacing: 3px;
+        cursor: pointer;
+        box-shadow: var(--shadow-lg);
+        transition:
+          transform 0.1s,
+          box-shadow 0.1s;
+      }
+      .btn-send:hover:not(:disabled) {
+        transform: translate(-3px, -3px);
+        box-shadow: 11px 11px 0 var(--black);
+      }
+      .btn-send:active:not(:disabled) {
+        transform: translate(3px, 3px);
+        box-shadow: 2px 2px 0 var(--black);
+      }
+      .btn-send:disabled {
+        background: #aaa;
+        cursor: not-allowed;
+        box-shadow: 3px 3px 0 #555;
+      }
+
+      /* ── STATUS PANEL ── */
+      .status-panel {
+        grid-column: span 2;
+      }
+      @media (max-width: 768px) {
+        .status-panel {
+          grid-column: span 1;
+        }
+      }
+
+      .stats-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      .stat-box {
+        border: var(--border);
+        padding: 16px;
+        text-align: center;
+        box-shadow: var(--shadow);
+      }
+      .stat-box.yellow {
+        background: var(--yellow);
+      }
+      .stat-box.pink {
+        background: var(--pink);
+        color: var(--white);
+      }
+      .stat-box.blue {
+        background: var(--blue);
+      }
+      .stat-num {
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 2.5rem;
+        letter-spacing: 2px;
+        line-height: 1;
+      }
+      .stat-label {
+        font-size: 0.65rem;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        margin-top: 4px;
+        font-weight: 700;
+      }
+
+      /* ── LOG ── */
+      .log-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .log-toolbar span {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+      }
+
+      #log-box {
+        background: var(--black);
+        color: var(--white);
+        padding: 16px;
+        min-height: 160px;
+        max-height: 260px;
+        overflow-y: auto;
+        font-size: 0.8rem;
+        border: var(--border);
+        box-shadow: inset 2px 2px 0 #333;
+        line-height: 1.8;
+      }
+      #log-box .log-ok {
+        color: #00ff88;
+      }
+      #log-box .log-fail {
+        color: var(--pink);
+      }
+      #log-box .log-warn {
+        color: var(--yellow);
+      }
+      #log-box .log-info {
+        color: var(--blue);
+      }
+      #log-box .log-session {
+        color: #aaffcc;
+      }
+
+      /* ── PROGRESS BAR ── */
+      .progress-wrap {
+        border: var(--border);
+        background: #ddd;
+        height: 24px;
+        margin-bottom: 16px;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+      #progress-bar {
+        height: 100%;
+        width: 0%;
+        transition: width 0.5s;
+        background: repeating-linear-gradient(
+          45deg,
+          var(--yellow),
+          var(--yellow) 10px,
+          var(--black) 10px,
+          var(--black) 20px
+        );
+      }
+
+      /* ── CURRENT STATUS ── */
+      .current-tag {
+        display: inline-block;
+        background: var(--blue);
+        border: var(--border);
+        padding: 4px 12px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        margin-bottom: 12px;
+        box-shadow: 3px 3px 0 var(--black);
+      }
+
+      /* ── TICKER ── */
+      .ticker {
+        background: var(--yellow);
+        border-top: 3px solid var(--black);
+        border-bottom: 3px solid var(--black);
+        padding: 8px 0;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+      .ticker-inner {
+        display: inline-block;
+        animation: ticker 18s linear infinite;
+        font-family: "Bebas Neue", sans-serif;
+        font-size: 1rem;
+        letter-spacing: 4px;
+        color: var(--black);
+      }
+      @keyframes ticker {
+        0% {
+          transform: translateX(100vw);
+        }
+        100% {
+          transform: translateX(-100%);
+        }
+      }
+
+      .hint {
+        font-size: 0.65rem;
+        color: #666;
+        margin-top: 4px;
+        letter-spacing: 1px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- popup removed: credentials now auto-saved to server + localStorage -->
+
+    <!-- ── TOAST ── -->
+    <div id="toast"></div>
+
+    <header>
+      <h1>// STREAK_BOT</h1>
+      <div class="header-right">
+        <div class="session-pill inactive" id="session-pill">
+          <span class="dot"></span> <span id="session-label">NO SESSION</span>
+        </div>
+        <span class="badge" id="header-status">IDLE</span>
+      </div>
+    </header>
+
+    <div class="ticker">
+      <span class="ticker-inner">
+        DELETE TIKTOK &nbsp;★&nbsp; KEEP YOUR STREAKS &nbsp;★&nbsp; AUTOMATED DM
+        &nbsp;★&nbsp; NO MORE DOOMSCROLLING &nbsp;★&nbsp; DELETE TIKTOK
+        &nbsp;★&nbsp; KEEP YOUR STREAKS &nbsp;★&nbsp; AUTOMATED DM &nbsp;★&nbsp;
+        NO MORE DOOMSCROLLING &nbsp;★&nbsp;
+      </span>
+    </div>
+
+    <main>
+      <!-- ── CREDENTIALS ── -->
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> CREDENTIALS</div>
+
+        <!-- Session active notice -->
+        <div
+          class="session-banner ok"
+          id="session-banner-ok"
+          style="display: none"
+        >
+          🔑 Saved session found (saved <span id="session-date">—</span>).<br />
+          Login will be skipped automatically.
+          <br /><button
+            class="btn-clear-session"
+            onclick="clearSession()"
+            style="margin-top: 8px"
+          >
+            ✕ Clear Session
+          </button>
+        </div>
+
+        <!-- Login error -->
+        <div class="login-error-banner" id="login-error-banner">
+          ✗ LOGIN FAILED — Wrong email or password.<br />
+          Please re-enter your credentials and try again.
+        </div>
+
+        <!-- Saved credentials notice -->
+        <div id="cred-saved-banner">
+          💾 Saved credentials found — fields pre-filled automatically.<br />
+          <button class="btn-forget-cred" onclick="forgetCredentials()">
+            ✕ Forget saved credentials
+          </button>
+        </div>
+
+        <div class="form-group">
+          <label>TikTok Email</label>
+          <input
+            type="email"
+            id="email"
+            placeholder="you@gmail.com"
+            autocomplete="email"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Password</label>
+          <div class="password-wrap">
+            <input
+              type="password"
+              id="password"
+              placeholder="••••••••"
+              autocomplete="current-password"
+            />
+            <button
+              class="btn-eye"
+              id="eye-btn"
+              onclick="togglePassword()"
+              title="Show / hide password"
+            >
+              👁
+            </button>
+          </div>
+          <p class="hint">Click the eye icon to show / hide your password</p>
+          <label class="save-row" style="margin-top: 10px">
+            <input type="checkbox" id="save-credentials" checked />
+            Remember email &amp; password (server + browser)
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label>Message</label>
+          <textarea
+            id="message"
+            placeholder="STREAK BOT AUTO DM — still here!"
+          ></textarea>
+          <p class="hint" id="char-count">0 characters</p>
+        </div>
+      </div>
+
+      <!-- ── TARGET ACCOUNTS ── -->
+      <div class="card">
+        <div class="card-title">
+          <span class="dot" style="background: var(--pink)"></span> TARGET
+          ACCOUNTS
+        </div>
+
+        <div class="form-group">
+          <label>Add Username (without @)</label>
+          <div class="username-input-row">
+            <input type="text" id="username-input" placeholder="e.g. user1" />
+            <button class="btn-add" onclick="addUsername()">+ ADD</button>
+          </div>
+          <p class="hint">Press Enter or click +ADD to add a username</p>
+        </div>
+
+        <!-- Toolbar: load saved / clear list -->
+        <div class="username-toolbar">
+          <button
+            class="btn-sm blue"
+            onclick="loadSavedUsernames()"
+            title="Load previously saved username list"
+          >
+            ↓ LOAD SAVED
+          </button>
+          <button
+            class="btn-sm danger"
+            onclick="clearList()"
+            title="Remove all usernames from the list"
+          >
+            ✕ CLEAR LIST
+          </button>
+        </div>
+
+        <label>Queue (<span id="count">0</span> accounts)</label>
+        <div id="username-list"></div>
+
+        <!-- Save checkbox -->
+        <label class="save-row">
+          <input type="checkbox" id="save-usernames" checked />
+          Save this list for next time
+        </label>
+
+        <div class="btn-row">
+          <button class="btn-send" id="send-btn" onclick="startSend()">
+            ▶ SEND DM
+          </button>
+        </div>
+      </div>
+
+      <!-- ── STATUS PANEL ── -->
+      <div class="card status-panel">
+        <div class="card-title">
+          <span class="dot" style="background: var(--blue)"></span> LIVE STATUS
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-box yellow">
+            <div class="stat-num" id="stat-total">0</div>
+            <div class="stat-label">Total Targets</div>
+          </div>
+          <div class="stat-box pink">
+            <div class="stat-num" id="stat-success">0</div>
+            <div class="stat-label">Sent</div>
+          </div>
+          <div class="stat-box blue">
+            <div class="stat-num" id="stat-failed">0</div>
+            <div class="stat-label">Failed</div>
+          </div>
+        </div>
+
+        <div class="progress-wrap"><div id="progress-bar"></div></div>
+
+        <div id="current-wrap" style="display: none">
+          <span class="current-tag"
+            >SENDING TO: <span id="current-user">—</span></span
+          >
+        </div>
+
+        <!-- Log toolbar -->
+        <div class="log-toolbar">
+          <span>// CONSOLE LOG</span>
+          <button
+            class="btn-sm"
+            onclick="exportLog()"
+            title="Download full log file"
+          >
+            ↓ EXPORT LOG
+          </button>
+        </div>
+        <div id="log-box">
+          <span class="log-info">// waiting for job to start...</span>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const usernames = [];
+      let polling = null;
+      let totalTargets = 0;
+      let passwordVisible = false;
+
+      // ── On load ──
+      window.addEventListener("DOMContentLoaded", () => {
+        checkSession();
+        loadSavedCredentials(); // try server first, then localStorage fallback
+        document
+          .getElementById("message")
+          .addEventListener("input", function () {
+            document.getElementById("char-count").textContent =
+              this.value.length + " characters";
+          });
+        document
+          .getElementById("username-input")
+          .addEventListener("keydown", (e) => {
+            if (e.key === "Enter") addUsername();
+          });
       });
-    } catch (_) {}
 
-    // Also save to localStorage as backup
-    try {
-      localStorage.setItem(CRED_KEY, JSON.stringify({ email, password }));
-    } catch (_) {}
+      // ── Credential save / load ─────────────────────────────
+      // Priority: server file → localStorage (fallback)
+      const CRED_KEY = "streakbot_credentials";
+      let toastTimer = null;
 
-    document.getElementById('cred-saved-banner').classList.add('visible');
-    showToast('💾 Credentials saved');
-  }
+      async function loadSavedCredentials() {
+        // 1. Try server-side credentials first
+        try {
+          const res = await fetch("/credentials");
+          const data = await res.json();
+          if (data.has_credentials && data.email) {
+            document.getElementById("email").value = data.email;
+            document.getElementById("password").value = data.password || "";
+            document
+              .getElementById("cred-saved-banner")
+              .classList.add("visible");
+            return; // server data loaded — done
+          }
+        } catch (_) {}
 
-  async function forgetCredentials() {
-    if (!confirm('Remove saved email & password?')) return;
-    // Delete from server
-    try { await fetch('/credentials', { method: 'DELETE' }); } catch (_) {}
-    // Delete from localStorage
-    try { localStorage.removeItem(CRED_KEY); } catch (_) {}
-
-    document.getElementById('email').value    = '';
-    document.getElementById('password').value = '';
-    document.getElementById('cred-saved-banner').classList.remove('visible');
-    showToast('🗑 Credentials removed');
-  }
-
-  function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
-  }
-
-  // ── Session ──────────────────────────────────────────
-  async function checkSession() {
-    try {
-      const res  = await fetch('/session');
-      const data = await res.json();
-      const pill  = document.getElementById('session-pill');
-      const label = document.getElementById('session-label');
-      const banner = document.getElementById('session-banner-ok');
-
-      if (data.has_session) {
-        pill.className  = 'session-pill active';
-        label.textContent = 'SESSION SAVED';
-        document.getElementById('session-date').textContent = data.saved_at;
-        banner.style.display = 'block';
-      } else {
-        pill.className  = 'session-pill inactive';
-        label.textContent = 'NO SESSION';
-        banner.style.display = 'none';
+        // 2. Fallback to localStorage
+        try {
+          const raw = localStorage.getItem(CRED_KEY);
+          if (!raw) return;
+          const { email, password } = JSON.parse(raw);
+          if (email) document.getElementById("email").value = email;
+          if (password) document.getElementById("password").value = password;
+          document.getElementById("cred-saved-banner").classList.add("visible");
+        } catch (_) {}
       }
-    } catch (_) {}
-  }
 
-  async function clearSession() {
-    if (!confirm('Delete saved session? You will need to log in again on the next run.')) return;
-    await fetch('/session', { method: 'DELETE' });
-    checkSession();
-    appendLog('Session cleared — full login required next run.', 'warn');
-  }
+      async function saveCredentials(email, password) {
+        // Save to server
+        try {
+          await fetch("/credentials", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          });
+        } catch (_) {}
 
-  // ── Password ──────────────────────────────────────────
-  function togglePassword() {
-    const input = document.getElementById('password');
-    const btn   = document.getElementById('eye-btn');
-    passwordVisible = !passwordVisible;
-    input.type  = passwordVisible ? 'text' : 'password';
-    btn.textContent = passwordVisible ? '🙈' : '👁';
-  }
+        // Also save to localStorage as backup
+        try {
+          localStorage.setItem(CRED_KEY, JSON.stringify({ email, password }));
+        } catch (_) {}
 
-  // ── Username list ─────────────────────────────────────
-  function addUsername() {
-    const input = document.getElementById('username-input');
-    const val = input.value.trim().replace(/^@/, '');
-    if (!val || usernames.includes(val)) { input.value = ''; return; }
-    usernames.push(val);
-    input.value = '';
-    renderList();
-  }
+        document.getElementById("cred-saved-banner").classList.add("visible");
+        showToast("💾 Credentials saved");
+      }
 
-  function removeUsername(u) {
-    const i = usernames.indexOf(u);
-    if (i > -1) usernames.splice(i, 1);
-    renderList();
-  }
+      async function forgetCredentials() {
+        if (!confirm("Remove saved email & password?")) return;
+        // Delete from server
+        try {
+          await fetch("/credentials", { method: "DELETE" });
+        } catch (_) {}
+        // Delete from localStorage
+        try {
+          localStorage.removeItem(CRED_KEY);
+        } catch (_) {}
 
-  function clearList() {
-    usernames.length = 0;
-    renderList();
-  }
+        document.getElementById("email").value = "";
+        document.getElementById("password").value = "";
+        document
+          .getElementById("cred-saved-banner")
+          .classList.remove("visible");
+        showToast("🗑 Credentials removed");
+      }
 
-  function renderList() {
-    const list = document.getElementById('username-list');
-    document.getElementById('count').textContent = usernames.length;
-    list.innerHTML = usernames.map(u => `
+      function showToast(msg) {
+        const t = document.getElementById("toast");
+        t.textContent = msg;
+        t.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => t.classList.remove("show"), 3000);
+      }
+
+      // ── Session ──────────────────────────────────────────
+      async function checkSession() {
+        try {
+          const res = await fetch("/session");
+          const data = await res.json();
+          const pill = document.getElementById("session-pill");
+          const label = document.getElementById("session-label");
+          const banner = document.getElementById("session-banner-ok");
+
+          if (data.has_session) {
+            pill.className = "session-pill active";
+            label.textContent = "SESSION SAVED";
+            document.getElementById("session-date").textContent = data.saved_at;
+            banner.style.display = "block";
+          } else {
+            pill.className = "session-pill inactive";
+            label.textContent = "NO SESSION";
+            banner.style.display = "none";
+          }
+        } catch (_) {}
+      }
+
+      async function clearSession() {
+        if (
+          !confirm(
+            "Delete saved session? You will need to log in again on the next run.",
+          )
+        )
+          return;
+        await fetch("/session", { method: "DELETE" });
+        checkSession();
+        appendLog("Session cleared — full login required next run.", "warn");
+      }
+
+      // ── Password ──────────────────────────────────────────
+      function togglePassword() {
+        const input = document.getElementById("password");
+        const btn = document.getElementById("eye-btn");
+        passwordVisible = !passwordVisible;
+        input.type = passwordVisible ? "text" : "password";
+        btn.textContent = passwordVisible ? "🙈" : "👁";
+      }
+
+      // ── Username list ─────────────────────────────────────
+      function addUsername() {
+        const input = document.getElementById("username-input");
+        const val = input.value.trim().replace(/^@/, "");
+        if (!val || usernames.includes(val)) {
+          input.value = "";
+          return;
+        }
+        usernames.push(val);
+        input.value = "";
+        renderList();
+      }
+
+      function removeUsername(u) {
+        const i = usernames.indexOf(u);
+        if (i > -1) usernames.splice(i, 1);
+        renderList();
+      }
+
+      function clearList() {
+        usernames.length = 0;
+        renderList();
+      }
+
+      function renderList() {
+        const list = document.getElementById("username-list");
+        document.getElementById("count").textContent = usernames.length;
+        list.innerHTML = usernames
+          .map(
+            (u) => `
       <div class="username-tag">@${u}<button onclick="removeUsername('${u}')">✕</button></div>
-    `).join('');
-  }
-
-  async function loadSavedUsernames() {
-    try {
-      const res  = await fetch('/usernames');
-      const data = await res.json();
-      if (!data.usernames || data.usernames.length === 0) {
-        appendLog('No saved username list found.', 'warn'); return;
-      }
-      // Merge without duplicates
-      let added = 0;
-      data.usernames.forEach(u => {
-        if (!usernames.includes(u)) { usernames.push(u); added++; }
-      });
-      renderList();
-      appendLog(`Loaded ${data.usernames.length} saved usernames (${added} new added).`, 'info');
-    } catch (err) {
-      appendLog('Failed to load saved usernames.', 'fail');
-    }
-  }
-
-  // ── Validation helpers ────────────────────────────────
-  function shakeField(id) {
-    const el = document.getElementById(id);
-    el.classList.remove('field-error');
-    void el.offsetWidth;
-    el.classList.add('field-error');
-    el.focus();
-  }
-
-  function clearLoginError() {
-    document.getElementById('login-error-banner').classList.remove('visible');
-    ['email','password'].forEach(id => document.getElementById(id).classList.remove('field-error'));
-  }
-
-  function showLoginError() {
-    document.getElementById('login-error-banner').classList.add('visible');
-    shakeField('email');
-    setTimeout(() => shakeField('password'), 120);
-  }
-
-  // ── Send ──────────────────────────────────────────────
-  async function startSend() {
-    clearLoginError();
-
-    const email    = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value.trim();
-    const message  = document.getElementById('message').value.trim();
-    const saveUsernames = document.getElementById('save-usernames').checked;
-
-    if (!email)            { shakeField('email');    appendLog('⚠ Email is required.', 'warn');            return; }
-    if (!password)         { shakeField('password'); appendLog('⚠ Password is required.', 'warn');         return; }
-    if (!message)          {                         appendLog('⚠ Message cannot be empty.', 'warn');      return; }
-    if (usernames.length === 0) {                    appendLog('⚠ Add at least one target username.', 'warn'); return; }
-
-    totalTargets = usernames.length;
-    document.getElementById('stat-total').textContent   = totalTargets;
-    document.getElementById('stat-success').textContent = 0;
-    document.getElementById('stat-failed').textContent  = 0;
-    document.getElementById('progress-bar').style.width = '0%';
-    document.getElementById('log-box').innerHTML = '';
-    setRunning(true);
-
-    // Auto-save credentials if checkbox is checked
-    if (document.getElementById('save-credentials').checked) {
-      await saveCredentials(email, password);
-    }
-
-    polling = setInterval(pollStatus, 2000);
-    appendLog('Job started...', 'info');
-
-    try {
-      const res = await fetch('/send-dm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, message, target_usernames: [...usernames], save_usernames: saveUsernames })
-      });
-
-      clearInterval(polling);
-
-      if (res.status === 409) {
-        appendLog('Another job is already running!', 'warn');
-        setRunning(false); return;
+    `,
+          )
+          .join("");
       }
 
-      if (res.status === 401) {
-        showLoginError();
-        appendLog('✗ Login failed — wrong email or password.', 'fail');
+      async function loadSavedUsernames() {
+        try {
+          const res = await fetch("/usernames");
+          const data = await res.json();
+          if (!data.usernames || data.usernames.length === 0) {
+            appendLog("No saved username list found.", "warn");
+            return;
+          }
+          // Merge without duplicates
+          let added = 0;
+          data.usernames.forEach((u) => {
+            if (!usernames.includes(u)) {
+              usernames.push(u);
+              added++;
+            }
+          });
+          renderList();
+          appendLog(
+            `Loaded ${data.usernames.length} saved usernames (${added} new added).`,
+            "info",
+          );
+        } catch (err) {
+          appendLog("Failed to load saved usernames.", "fail");
+        }
+      }
+
+      // ── Validation helpers ────────────────────────────────
+      function shakeField(id) {
+        const el = document.getElementById(id);
+        el.classList.remove("field-error");
+        void el.offsetWidth;
+        el.classList.add("field-error");
+        el.focus();
+      }
+
+      function clearLoginError() {
+        document
+          .getElementById("login-error-banner")
+          .classList.remove("visible");
+        ["email", "password"].forEach((id) =>
+          document.getElementById(id).classList.remove("field-error"),
+        );
+      }
+
+      function showLoginError() {
+        document.getElementById("login-error-banner").classList.add("visible");
+        shakeField("email");
+        setTimeout(() => shakeField("password"), 120);
+      }
+
+      // ── Send ──────────────────────────────────────────────
+      async function startSend() {
+        clearLoginError();
+
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value.trim();
+        const message = document.getElementById("message").value.trim();
+        const saveUsernames = document.getElementById("save-usernames").checked;
+
+        if (!email) {
+          shakeField("email");
+          appendLog("⚠ Email is required.", "warn");
+          return;
+        }
+        if (!password) {
+          shakeField("password");
+          appendLog("⚠ Password is required.", "warn");
+          return;
+        }
+        if (!message) {
+          appendLog("⚠ Message cannot be empty.", "warn");
+          return;
+        }
+        if (usernames.length === 0) {
+          appendLog("⚠ Add at least one target username.", "warn");
+          return;
+        }
+
+        totalTargets = usernames.length;
+        document.getElementById("stat-total").textContent = totalTargets;
+        document.getElementById("stat-success").textContent = 0;
+        document.getElementById("stat-failed").textContent = 0;
+        document.getElementById("progress-bar").style.width = "0%";
+        document.getElementById("log-box").innerHTML = "";
+        setRunning(true);
+
+        // Auto-save credentials if checkbox is checked
+        if (document.getElementById("save-credentials").checked) {
+          await saveCredentials(email, password);
+        }
+
+        polling = setInterval(pollStatus, 2000);
+        appendLog("Job started...", "info");
+
+        try {
+          const res = await fetch("/send-dm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email,
+              password,
+              message,
+              target_usernames: [...usernames],
+              save_usernames: saveUsernames,
+            }),
+          });
+
+          clearInterval(polling);
+
+          if (res.status === 409) {
+            appendLog("Another job is already running!", "warn");
+            setRunning(false);
+            return;
+          }
+
+          if (res.status === 401) {
+            showLoginError();
+            appendLog("✗ Login failed — wrong email or password.", "fail");
+            setRunning(false);
+            document.getElementById("header-status").textContent =
+              "LOGIN FAILED";
+            return;
+          }
+
+          const data = await res.json();
+          document.getElementById("stat-success").textContent = data.success;
+          document.getElementById("stat-failed").textContent = data.failed;
+          document.getElementById("progress-bar").style.width = "100%";
+          document.getElementById("header-status").textContent = "DONE";
+          appendLog(
+            `✓ Done! Sent: ${data.success} | Failed: ${data.failed}`,
+            "ok",
+          );
+          checkSession(); // refresh session pill (cookies may have just been saved)
+        } catch (err) {
+          clearInterval(polling);
+          appendLog(
+            "Cannot connect to API. Make sure the server is running!",
+            "fail",
+          );
+        }
+
         setRunning(false);
-        document.getElementById('header-status').textContent = 'LOGIN FAILED';
-        return;
       }
 
-      const data = await res.json();
-      document.getElementById('stat-success').textContent = data.success;
-      document.getElementById('stat-failed').textContent  = data.failed;
-      document.getElementById('progress-bar').style.width = '100%';
-      document.getElementById('header-status').textContent = 'DONE';
-      appendLog(`✓ Done! Sent: ${data.success} | Failed: ${data.failed}`, 'ok');
-      checkSession(); // refresh session pill (cookies may have just been saved)
+      // ── Poll status while fetch is blocking ───────────────
+      async function pollStatus() {
+        try {
+          const res = await fetch("/status");
+          const data = await res.json();
 
-    } catch (err) {
-      clearInterval(polling);
-      appendLog('Cannot connect to API. Make sure the server is running!', 'fail');
-    }
+          document.getElementById("stat-success").textContent = data.success;
+          document.getElementById("stat-failed").textContent = data.failed;
 
-    setRunning(false);
-  }
+          const done = data.success + data.failed;
+          const pct = totalTargets > 0 ? (done / totalTargets) * 100 : 0;
+          document.getElementById("progress-bar").style.width = pct + "%";
 
-  // ── Poll status while fetch is blocking ───────────────
-  async function pollStatus() {
-    try {
-      const res  = await fetch('/status');
-      const data = await res.json();
+          if (data.current) {
+            document.getElementById("current-wrap").style.display = "block";
+            document.getElementById("current-user").textContent = data.current;
+          } else {
+            document.getElementById("current-wrap").style.display = "none";
+          }
 
-      document.getElementById('stat-success').textContent = data.success;
-      document.getElementById('stat-failed').textContent  = data.failed;
-
-      const done = data.success + data.failed;
-      const pct  = totalTargets > 0 ? (done / totalTargets * 100) : 0;
-      document.getElementById('progress-bar').style.width = pct + '%';
-
-      if (data.current) {
-        document.getElementById('current-wrap').style.display = 'block';
-        document.getElementById('current-user').textContent = data.current;
-      } else {
-        document.getElementById('current-wrap').style.display = 'none';
+          const logBox = document.getElementById("log-box");
+          logBox.innerHTML = data.log
+            .map((line) => {
+              if (line.startsWith("OK:"))
+                return `<div class="log-ok">✓ ${line}</div>`;
+              if (line.startsWith("FAILED:"))
+                return `<div class="log-fail">✗ ${line}</div>`;
+              if (line.startsWith("⚠"))
+                return `<div class="log-warn">${line}</div>`;
+              if (line.startsWith("✗"))
+                return `<div class="log-fail">${line}</div>`;
+              if (line.startsWith("🔑") || line.startsWith("✓ Session"))
+                return `<div class="log-session">${line}</div>`;
+              if (line.startsWith("✓"))
+                return `<div class="log-ok">${line}</div>`;
+              return `<div class="log-info">» ${line}</div>`;
+            })
+            .join("");
+          logBox.scrollTop = logBox.scrollHeight;
+        } catch (_) {}
       }
 
-      const logBox = document.getElementById('log-box');
-      logBox.innerHTML = data.log.map(line => {
-        if (line.startsWith('OK:'))   return `<div class="log-ok">✓ ${line}</div>`;
-        if (line.startsWith('FAILED:')) return `<div class="log-fail">✗ ${line}</div>`;
-        if (line.startsWith('⚠'))    return `<div class="log-warn">${line}</div>`;
-        if (line.startsWith('✗'))    return `<div class="log-fail">${line}</div>`;
-        if (line.startsWith('🔑') || line.startsWith('✓ Session')) return `<div class="log-session">${line}</div>`;
-        if (line.startsWith('✓'))    return `<div class="log-ok">${line}</div>`;
-        return `<div class="log-info">» ${line}</div>`;
-      }).join('');
-      logBox.scrollTop = logBox.scrollHeight;
+      // ── Export log ────────────────────────────────────────
+      function exportLog() {
+        const a = document.createElement("a");
+        a.href = "/export-log";
+        a.download = "tiktok_dm.log";
+        a.click();
+      }
 
-    } catch (_) {}
-  }
+      // ── Helpers ───────────────────────────────────────────
+      function appendLog(msg, type = "info") {
+        const logBox = document.getElementById("log-box");
+        const cls =
+          {
+            ok: "log-ok",
+            fail: "log-fail",
+            warn: "log-warn",
+            info: "log-info",
+          }[type] || "log-info";
+        logBox.innerHTML += `<div class="${cls}">» ${msg}</div>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
 
-  // ── Export log ────────────────────────────────────────
-  function exportLog() {
-    const a = document.createElement('a');
-    a.href = '/export-log';
-    a.download = 'tiktok_dm.log';
-    a.click();
-  }
-
-  // ── Helpers ───────────────────────────────────────────
-  function appendLog(msg, type = 'info') {
-    const logBox = document.getElementById('log-box');
-    const cls = { ok:'log-ok', fail:'log-fail', warn:'log-warn', info:'log-info' }[type] || 'log-info';
-    logBox.innerHTML += `<div class="${cls}">» ${msg}</div>`;
-    logBox.scrollTop = logBox.scrollHeight;
-  }
-
-  function setRunning(running) {
-    const sendBtn = document.getElementById('send-btn');
-    const badge   = document.getElementById('header-status');
-    sendBtn.disabled    = running;
-    sendBtn.textContent = running ? '⏳ SENDING...' : '▶ SEND DM';
-    badge.textContent   = running ? 'RUNNING' : 'IDLE';
-    badge.style.background = running ? 'var(--blue)' : 'var(--pink)';
-  }
-</script>
-</body>
+      function setRunning(running) {
+        const sendBtn = document.getElementById("send-btn");
+        const badge = document.getElementById("header-status");
+        sendBtn.disabled = running;
+        sendBtn.textContent = running ? "⏳ SENDING..." : "▶ SEND DM";
+        badge.textContent = running ? "RUNNING" : "IDLE";
+        badge.style.background = running ? "var(--blue)" : "var(--pink)";
+      }
+    </script>
+  </body>
 </html>
