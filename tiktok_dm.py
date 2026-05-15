@@ -38,10 +38,11 @@ import subprocess
 BASE_DIR      = Path(os.environ.get("DATA_DIR", "."))
 BASE_DIR.mkdir(parents=True, exist_ok=True)
 
-COOKIE_FILE   = BASE_DIR / "tiktok_cookies.pkl"    # saved session cookies
-USERNAME_FILE = BASE_DIR / "saved_usernames.json"  # persisted username list
-CRED_FILE     = BASE_DIR / "saved_credentials.json"# saved email + password
-LOG_FILE      = BASE_DIR / "tiktok_dm.log"
+COOKIE_FILE      = BASE_DIR / "tiktok_cookies.pkl"    # saved session cookies
+USERNAME_FILE    = BASE_DIR / "saved_usernames.json"  # persisted username list
+CRED_FILE        = BASE_DIR / "saved_credentials.json"# saved email + password
+LOG_FILE         = BASE_DIR / "tiktok_dm.log"
+SCREENSHOT_FILE  = BASE_DIR / "login_failed.png"      # screenshot saat login gagal
 
 # ── Logging ──────────────────────────────────────────────
 logging.basicConfig(
@@ -284,6 +285,15 @@ class TikTokDMSender:
                 )
                 if captcha_el:
                     log.error("CAPTCHA terdeteksi — login gagal di headless mode.")
+                    try:
+                        driver.save_screenshot(str(SCREENSHOT_FILE))
+                        log.info(f"Screenshot disimpan → {SCREENSHOT_FILE} (akses via /screenshot)")
+                        job_status["log"].append(
+                            "📸 Screenshot disimpan — buka /screenshot di browser untuk lihat "
+                            "tampilan CAPTCHA yang diblokir."
+                        )
+                    except Exception:
+                        pass
                     job_status["log"].append(
                         "⚠ CAPTCHA muncul! TikTok memblokir login headless. "
                         "Kemungkinan IP datacenter diblokir — coba pakai proxy residential."
@@ -299,6 +309,16 @@ class TikTokDMSender:
                 )
             except Exception:
                 log.error("Login failed — still on login page.")
+                # ── Simpan screenshot untuk diagnosa ──
+                try:
+                    driver.save_screenshot(str(SCREENSHOT_FILE))
+                    log.info(f"Screenshot disimpan → {SCREENSHOT_FILE} (akses via /screenshot)")
+                    job_status["log"].append(
+                        "📸 Screenshot disimpan — buka /screenshot di browser untuk lihat "
+                        "apa yang ditampilkan TikTok saat login gagal."
+                    )
+                except Exception as ss_err:
+                    log.warning(f"Gagal simpan screenshot: {ss_err}")
                 job_status["log"].append(
                     "✗ Login gagal — tetap di halaman login. "
                     "Kemungkinan: password salah, CAPTCHA tersembunyi, atau IP diblokir TikTok."
@@ -591,6 +611,31 @@ def export_log():
         content=LOG_FILE.read_text(encoding="utf-8"),
         headers={"Content-Disposition": "attachment; filename=tiktok_dm.log"}
     )
+
+# ── Screenshot diagnosa ──────────────────────────────────
+
+@app.get("/screenshot")
+def get_screenshot():
+    """
+    Tampilkan screenshot terakhir saat login gagal.
+    Gunakan ini untuk diagnosa: lihat apa yang TikTok tampilkan (CAPTCHA, error, dll).
+    """
+    if not SCREENSHOT_FILE.exists():
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Belum ada screenshot. Coba login dulu agar screenshot tersimpan."}
+        )
+    return FileResponse(str(SCREENSHOT_FILE), media_type="image/png")
+
+
+@app.delete("/screenshot")
+def clear_screenshot():
+    """Hapus screenshot yang tersimpan."""
+    if SCREENSHOT_FILE.exists():
+        SCREENSHOT_FILE.unlink()
+        return {"status": "cleared"}
+    return {"status": "no_screenshot"}
+
 
 # ── Force reset ────────────────────────────────────────────
 
