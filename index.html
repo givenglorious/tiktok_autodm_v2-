@@ -1026,18 +1026,20 @@
       let passwordVisible = false;
 
       // ── On load ──
-      window.addEventListener("DOMContentLoaded", async () => {
-        await fetch("/reset", { method: "POST" }).catch(() => {});
-        document.getElementById("login-error-banner").classList.remove("visible");
+      window.addEventListener("DOMContentLoaded", () => {
         checkSession();
-        loadSavedCredentials();
-        await loadSavedUsernames();
-        document.getElementById("message").addEventListener("input", function () {
-          document.getElementById("char-count").textContent = this.value.length + " characters";
-        });
-        document.getElementById("username-input").addEventListener("keydown", (e) => {
-          if (e.key === "Enter") addUsername();
-        });
+        loadSavedCredentials(); // try server first, then localStorage fallback
+        document
+          .getElementById("message")
+          .addEventListener("input", function () {
+            document.getElementById("char-count").textContent =
+              this.value.length + " characters";
+          });
+        document
+          .getElementById("username-input")
+          .addEventListener("keydown", (e) => {
+            if (e.key === "Enter") addUsername();
+          });
       });
 
       // ── Credential save / load ─────────────────────────────
@@ -1184,19 +1186,16 @@
         renderList();
       }
 
-      function renderList(sync = true) {
+      function renderList() {
         const list = document.getElementById("username-list");
         document.getElementById("count").textContent = usernames.length;
-        list.innerHTML = usernames.map((u) =>
-          `<div class="username-tag">@${u}<button onclick="removeUsername('${u}')">✕</button></div>`
-        ).join("");
-        if (sync) {
-          fetch("/usernames", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ usernames: [...usernames] })
-          }).catch(() => {});
-        }
+        list.innerHTML = usernames
+          .map(
+            (u) => `
+      <div class="username-tag">@${u}<button onclick="removeUsername('${u}')">✕</button></div>
+    `,
+          )
+          .join("");
       }
 
       async function loadSavedUsernames() {
@@ -1204,14 +1203,22 @@
           const res = await fetch("/usernames");
           const data = await res.json();
           if (!data.usernames || data.usernames.length === 0) {
-            appendLog("No saved usernames on server yet.", "warn");
+            appendLog("No saved username list found.", "warn");
             return;
           }
+          // Merge without duplicates
+          let added = 0;
           data.usernames.forEach((u) => {
-            if (!usernames.includes(u)) usernames.push(u);
+            if (!usernames.includes(u)) {
+              usernames.push(u);
+              added++;
+            }
           });
-          renderList(false);
-          appendLog(`Loaded ${data.usernames.length} usernames from server.`, "info");
+          renderList();
+          appendLog(
+            `Loaded ${data.usernames.length} saved usernames (${added} new added).`,
+            "info",
+          );
         } catch (err) {
           appendLog("Failed to load saved usernames.", "fail");
         }
