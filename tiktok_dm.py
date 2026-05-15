@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
 
+import threading
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -56,6 +57,14 @@ log = logging.getLogger(__name__)
 
 # ── FastAPI ───────────────────────────────────────────────
 app = FastAPI(title="TikTok Auto DM API")
+
+@app.on_event("startup")
+def startup_reset():
+    """Reset job_status saat app startup — cegah stuck dari deploy sebelumnya."""
+    global job_status
+    job_status["running"] = False
+    job_status["current"] = ""
+    log.info("Startup: job_status direset ke idle.")
 
 app.add_middleware(
     CORSMiddleware,
@@ -282,6 +291,7 @@ class TikTokDMSender:
                     job_status["log"].append(
                         "✗ Login failed — wrong email or password. Please re-enter your credentials."
                     )
+                    job_status["running"] = False
                     return
 
             job_status["log"].append("Starting DM job...")
@@ -301,7 +311,10 @@ class TikTokDMSender:
                 time.sleep(5)
 
         finally:
-            driver.quit()
+            try:
+                driver.quit()
+            except Exception:
+                pass
             job_status["running"] = False
             job_status["current"] = ""
             if not job_status["login_failed"]:
@@ -355,7 +368,9 @@ def send_dm(req: DMRequest):
         "save_usernames":   req.save_usernames,
     }
 
-    TikTokDMSender(config).run()
+    thread = threading.Thread(target=TikTokDMSender(config).run, daemon=True)
+    thread.start()
+    thread.join()  # tunggu selesai supaya response tetap sinkron
 
     if job_status["login_failed"]:
         return JSONResponse(
