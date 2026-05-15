@@ -1189,39 +1189,23 @@
       function renderList() {
         const list = document.getElementById("username-list");
         document.getElementById("count").textContent = usernames.length;
-        list.innerHTML = usernames
-          .map(
-            (u) => `
-      <div class="username-tag">@${u}<button onclick="removeUsername('${u}')">✕</button></div>
-    `,
-          )
-          .join("");
+        list.innerHTML = usernames.map((u) => `<div class="username-tag">@${u}<button onclick="removeUsername('${u}')">✕</button></div>`).join("");
+        localStorage.setItem("streak_usernames", JSON.stringify(usernames));
       }
 
       async function loadSavedUsernames() {
-        try {
-          const res = await fetch("/usernames");
-          const data = await res.json();
-          if (!data.usernames || data.usernames.length === 0) {
-            appendLog("No saved username list found.", "warn");
+        const saved = localStorage.getItem("streak_usernames");
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            let added = 0;
+            parsed.forEach((u) => { if (!usernames.includes(u)) { usernames.push(u); added++; } });
+            renderList();
+            appendLog(`Loaded ${parsed.length} saved usernames from browser storage.`, "info");
             return;
-          }
-          // Merge without duplicates
-          let added = 0;
-          data.usernames.forEach((u) => {
-            if (!usernames.includes(u)) {
-              usernames.push(u);
-              added++;
-            }
-          });
-          renderList();
-          appendLog(
-            `Loaded ${data.usernames.length} saved usernames (${added} new added).`,
-            "info",
-          );
-        } catch (err) {
-          appendLog("Failed to load saved usernames.", "fail");
+          } catch (_) {}
         }
+        appendLog("No saved username list found.", "warn");
       }
 
       // ── Validation helpers ────────────────────────────────
