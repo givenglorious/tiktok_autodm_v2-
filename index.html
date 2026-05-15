@@ -1026,20 +1026,18 @@
       let passwordVisible = false;
 
       // ── On load ──
-      window.addEventListener("DOMContentLoaded", () => {
+      window.addEventListener("DOMContentLoaded", async () => {
+        await fetch("/reset", { method: "POST" }).catch(() => {});
+        document.getElementById("login-error-banner").classList.remove("visible");
         checkSession();
-        loadSavedCredentials(); // try server first, then localStorage fallback
-        document
-          .getElementById("message")
-          .addEventListener("input", function () {
-            document.getElementById("char-count").textContent =
-              this.value.length + " characters";
-          });
-        document
-          .getElementById("username-input")
-          .addEventListener("keydown", (e) => {
-            if (e.key === "Enter") addUsername();
-          });
+        loadSavedCredentials();
+        loadSavedUsernames();
+        document.getElementById("message").addEventListener("input", function () {
+          document.getElementById("char-count").textContent = this.value.length + " characters";
+        });
+        document.getElementById("username-input").addEventListener("keydown", (e) => {
+          if (e.key === "Enter") addUsername();
+        });
       });
 
       // ── Credential save / load ─────────────────────────────
@@ -1189,23 +1187,33 @@
       function renderList() {
         const list = document.getElementById("username-list");
         document.getElementById("count").textContent = usernames.length;
-        list.innerHTML = usernames.map((u) => `<div class="username-tag">@${u}<button onclick="removeUsername('${u}')">✕</button></div>`).join("");
-        localStorage.setItem("streak_usernames", JSON.stringify(usernames));
+        list.innerHTML = usernames.map((u) =>
+          `<div class="username-tag">@${u}<button onclick="removeUsername('${u}')">✕</button></div>`
+        ).join("");
+        fetch("/usernames", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ usernames: [...usernames] })
+        }).catch(() => {});
       }
 
       async function loadSavedUsernames() {
-        const saved = localStorage.getItem("streak_usernames");
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            let added = 0;
-            parsed.forEach((u) => { if (!usernames.includes(u)) { usernames.push(u); added++; } });
-            renderList();
-            appendLog(`Loaded ${parsed.length} saved usernames from browser storage.`, "info");
+        try {
+          const res = await fetch("/usernames");
+          const data = await res.json();
+          if (!data.usernames || data.usernames.length === 0) {
+            appendLog("No saved usernames on server yet.", "warn");
             return;
-          } catch (_) {}
+          }
+          let added = 0;
+          data.usernames.forEach((u) => {
+            if (!usernames.includes(u)) { usernames.push(u); added++; }
+          });
+          renderList();
+          appendLog(`Loaded ${data.usernames.length} usernames from server.`, "info");
+        } catch (err) {
+          appendLog("Failed to load saved usernames.", "fail");
         }
-        appendLog("No saved username list found.", "warn");
       }
 
       // ── Validation helpers ────────────────────────────────
