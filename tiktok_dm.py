@@ -145,10 +145,12 @@ class TikTokDMSender:
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option("useAutomationExtension", False)
         options.add_argument("--window-size=1280,900")
+        options.add_argument("--lang=id-ID")
+        # ← User-agent Chrome terbaru (lebih susah dideteksi)
         options.add_argument(
             "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
+            "Chrome/124.0.0.0 Safari/537.36"
         )
 
         # ── Deteksi Chromium via `which` (paling akurat di semua environment) ──
@@ -179,9 +181,24 @@ class TikTokDMSender:
             service = Service(ChromeDriverManager().install())
 
         driver = webdriver.Chrome(service=service, options=options)
-        driver.execute_script(
-            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-        )
+
+        # ── Anti-detection via CDP (lebih kuat dari execute_script biasa) ──
+        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+            "source": """
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+                Object.defineProperty(navigator, 'languages', {get: () => ['id-ID', 'id', 'en-US', 'en']});
+                Object.defineProperty(navigator, 'platform', {get: () => 'Win32'});
+                window.chrome = { runtime: {}, loadTimes: function(){}, csi: function(){}, app: {} };
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications' ?
+                    Promise.resolve({state: Notification.permission}) :
+                    originalQuery(parameters)
+                );
+            """
+        })
+
         log.info("Chrome driver berhasil diinisialisasi.")
         job_status["log"].append("✓ Browser berhasil distart.")
         return driver
@@ -233,35 +250,59 @@ class TikTokDMSender:
         log.info("Opening TikTok login page...")
         job_status["log"].append("🔐 Logging in to TikTok...")
         driver.get("https://www.tiktok.com/login/phone-or-email/email")
-        time.sleep(3)
+        time.sleep(4)
 
         try:
             email_input = wait.until(
                 EC.presence_of_element_located((By.NAME, "username"))
             )
             email_input.clear()
-            email_input.send_keys(self.config["email"])
+            # Ketik pelan-pelan seperti manusia
+            for ch in self.config["email"]:
+                email_input.send_keys(ch)
+                time.sleep(0.07)
             time.sleep(1)
 
             pass_input = driver.find_element(By.XPATH, '//input[@type="password"]')
             pass_input.clear()
-            pass_input.send_keys(self.config["password"])
+            for ch in self.config["password"]:
+                pass_input.send_keys(ch)
+                time.sleep(0.07)
             time.sleep(1)
 
             login_btn = driver.find_element(By.XPATH, '//button[@data-e2e="login-button"]')
             login_btn.click()
             log.info("Waiting for login response...")
-            time.sleep(6)
+            time.sleep(10)  # beri waktu lebih untuk redirect/challenge
 
-            if "captcha" in driver.current_url.lower():
-                job_status["log"].append(
-                    "⚠ CAPTCHA triggered in headless mode — cannot solve. "
-                    "Try clearing session and running again."
+            # ── Deteksi CAPTCHA via DOM (bukan URL) ──
+            try:
+                captcha_el = driver.find_element(
+                    By.XPATH,
+                    '//*[contains(@id,"captcha") or contains(@class,"captcha") '
+                    'or contains(@class,"verify-wrap") or contains(@class,"secsdk")]'
                 )
-                time.sleep(5)
+                if captcha_el:
+                    log.error("CAPTCHA terdeteksi — login gagal di headless mode.")
+                    job_status["log"].append(
+                        "⚠ CAPTCHA muncul! TikTok memblokir login headless. "
+                        "Kemungkinan IP datacenter diblokir — coba pakai proxy residential."
+                    )
+                    return False
+            except Exception:
+                pass  # tidak ada CAPTCHA, lanjut
 
-            if "login" in driver.current_url.lower():
+            # ── Tunggu redirect keluar dari halaman login ──
+            try:
+                WebDriverWait(driver, 15).until(
+                    lambda d: "login" not in d.current_url.lower()
+                )
+            except Exception:
                 log.error("Login failed — still on login page.")
+                job_status["log"].append(
+                    "✗ Login gagal — tetap di halaman login. "
+                    "Kemungkinan: password salah, CAPTCHA tersembunyi, atau IP diblokir TikTok."
+                )
                 return False
 
             log.info("Login successful! Saving cookies...")
