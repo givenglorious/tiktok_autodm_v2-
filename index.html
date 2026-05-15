@@ -1005,13 +1005,24 @@
         <!-- Log toolbar -->
         <div class="log-toolbar">
           <span>// CONSOLE LOG</span>
-          <button
-            class="btn-sm"
-            onclick="exportLog()"
-            title="Download full log file"
-          >
-            ↓ EXPORT LOG
-          </button>
+          <div style="display:flex;gap:8px;">
+            <button
+              class="btn-sm danger"
+              id="reset-btn"
+              onclick="resetJob()"
+              title="Paksa reset jika job stuck / Another job is already running"
+              style="display:none"
+            >
+              ⚠ FORCE RESET
+            </button>
+            <button
+              class="btn-sm"
+              onclick="exportLog()"
+              title="Download full log file"
+            >
+              ↓ EXPORT LOG
+            </button>
+          </div>
         </div>
         <div id="log-box">
           <span class="log-info">// waiting for job to start...</span>
@@ -1308,7 +1319,8 @@
           clearInterval(polling);
 
           if (res.status === 409) {
-            appendLog("Another job is already running!", "warn");
+            appendLog("⚠ Another job is already running! Klik FORCE RESET jika job stuck.", "warn");
+            document.getElementById("reset-btn").style.display = "inline-block";
             setRunning(false);
             return;
           }
@@ -1391,6 +1403,20 @@
         a.href = "/export-log";
         a.download = "tiktok_dm.log";
         a.click();
+      }
+
+      // ── Force reset ───────────────────────────────────────
+      async function resetJob() {
+        if (!confirm("Reset paksa job yang stuck? Gunakan ini kalau terus muncul 'Another job is already running!'")) return;
+        try {
+          await fetch("/reset", { method: "POST" });
+          setRunning(false);
+          document.getElementById("reset-btn").style.display = "none";
+          appendLog("⚠ Job di-reset paksa — siap kirim lagi.", "warn");
+          showToast("✓ Job berhasil direset");
+        } catch (err) {
+          appendLog("Gagal reset — pastikan server berjalan.", "fail");
+        }
       }
 
       // ── Helpers ───────────────────────────────────────────

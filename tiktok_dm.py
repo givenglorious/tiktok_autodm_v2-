@@ -463,3 +463,23 @@ def export_log():
         content=LOG_FILE.read_text(encoding="utf-8"),
         headers={"Content-Disposition": "attachment; filename=tiktok_dm.log"}
     )
+
+# ── Force reset ────────────────────────────────────────────
+
+@app.post("/reset")
+def reset_job():
+    """
+    Paksa reset job_status ke idle.
+    Gunakan jika ada 'job hantu' yang bikin endpoint /send-dm selalu 409.
+    """
+    global job_status
+    job_status = {
+        "running": False,
+        "login_failed": False,
+        "success": 0,
+        "failed": 0,
+        "current": "",
+        "log": []
+    }
+    log.info("Job status di-reset paksa via /reset endpoint.")
+    return {"status": "reset", "message": "Job status berhasil direset."}
