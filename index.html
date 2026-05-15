@@ -1031,7 +1031,7 @@
         document.getElementById("login-error-banner").classList.remove("visible");
         checkSession();
         loadSavedCredentials();
-        loadSavedUsernames();
+        await loadSavedUsernames();
         document.getElementById("message").addEventListener("input", function () {
           document.getElementById("char-count").textContent = this.value.length + " characters";
         });
@@ -1184,17 +1184,19 @@
         renderList();
       }
 
-      function renderList() {
+      function renderList(sync = true) {
         const list = document.getElementById("username-list");
         document.getElementById("count").textContent = usernames.length;
         list.innerHTML = usernames.map((u) =>
           `<div class="username-tag">@${u}<button onclick="removeUsername('${u}')">✕</button></div>`
         ).join("");
-        fetch("/usernames", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ usernames: [...usernames] })
-        }).catch(() => {});
+        if (sync) {
+          fetch("/usernames", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ usernames: [...usernames] })
+          }).catch(() => {});
+        }
       }
 
       async function loadSavedUsernames() {
@@ -1205,11 +1207,10 @@
             appendLog("No saved usernames on server yet.", "warn");
             return;
           }
-          let added = 0;
           data.usernames.forEach((u) => {
-            if (!usernames.includes(u)) { usernames.push(u); added++; }
+            if (!usernames.includes(u)) usernames.push(u);
           });
-          renderList();
+          renderList(false);
           appendLog(`Loaded ${data.usernames.length} usernames from server.`, "info");
         } catch (err) {
           appendLog("Failed to load saved usernames.", "fail");
