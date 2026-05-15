@@ -112,7 +112,7 @@ class TikTokDMSender:
         options.add_argument("--headless=new")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-gpu")               # wajib di server/Railway
+        options.add_argument("--disable-gpu")
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option("useAutomationExtension", False)
@@ -123,22 +123,41 @@ class TikTokDMSender:
             "Chrome/120.0.0.0 Safari/537.36"
         )
 
-        # ── Deteksi environment: Railway (Nix) vs lokal ──
-        NIX_CHROMIUM     = "/run/current-system/sw/bin/chromium"
-        NIX_CHROMEDRIVER = "/run/current-system/sw/bin/chromedriver"
+        # ── Cari Chromium binary di berbagai path (Railway/Nix/Docker/lokal) ──
+        CHROMIUM_CANDIDATES = [
+            "/run/current-system/sw/bin/chromium",       # Railway Nix
+            "/usr/bin/chromium",                          # Debian/Ubuntu
+            "/usr/bin/chromium-browser",                  # Ubuntu alt
+            "/usr/bin/google-chrome",                     # Chrome
+            "/usr/bin/google-chrome-stable",
+        ]
+        CHROMEDRIVER_CANDIDATES = [
+            "/run/current-system/sw/bin/chromedriver",
+            "/usr/bin/chromedriver",
+            "/usr/lib/chromium/chromedriver",
+            "/usr/lib/chromium-browser/chromedriver",
+        ]
 
-        if Path(NIX_CHROMIUM).exists():
-            log.info("Menggunakan Chromium dari Nix (Railway mode)")
-            options.binary_location = NIX_CHROMIUM
-            service = Service(NIX_CHROMEDRIVER)
+        chromium_path    = next((p for p in CHROMIUM_CANDIDATES    if Path(p).exists()), None)
+        chromedriver_path = next((p for p in CHROMEDRIVER_CANDIDATES if Path(p).exists()), None)
+
+        log.info(f"Chromium binary  : {chromium_path or 'NOT FOUND — pakai ChromeDriverManager'}")
+        log.info(f"ChromeDriver path: {chromedriver_path or 'NOT FOUND — pakai ChromeDriverManager'}")
+        job_status["log"].append(f"🔧 Chromium: {chromium_path or 'auto-detect via ChromeDriverManager'}")
+
+        if chromium_path and chromedriver_path:
+            options.binary_location = chromium_path
+            service = Service(chromedriver_path)
         else:
-            log.info("Chromium Nix tidak ditemukan — pakai ChromeDriverManager (local mode)")
+            log.info("Pakai ChromeDriverManager (local/fallback mode)")
             service = Service(ChromeDriverManager().install())
 
         driver = webdriver.Chrome(service=service, options=options)
         driver.execute_script(
             "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
         )
+        log.info("Chrome driver berhasil diinisialisasi.")
+        job_status["log"].append("✓ Browser berhasil distart.")
         return driver
 
     # ── Cookie helpers ────────────────────────────────────
@@ -279,9 +298,11 @@ class TikTokDMSender:
             "log": []
         }
 
-        driver = self._init_driver()
-
+        driver = None
         try:
+            job_status["log"].append("🚀 Memulai browser...")
+            driver = self._init_driver()
+
             # Try restoring cookies first; fall back to full login
             session_ok = self._load_cookies(driver)
 
@@ -310,9 +331,13 @@ class TikTokDMSender:
 
                 time.sleep(5)
 
+        except Exception as e:
+            log.error(f"Unexpected error di run(): {e}")
+            job_status["log"].append(f"✗ Error: {e}")
         finally:
             try:
-                driver.quit()
+                if driver:
+                    driver.quit()
             except Exception:
                 pass
             job_status["running"] = False
