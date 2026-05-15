@@ -34,6 +34,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 # DATA_DIR env var diset ke /data (Railway Volume) supaya file tidak hilang saat redeploy.
 # Kalau tidak ada env var (local), pakai direktori saat ini.
 import os
+import subprocess
 BASE_DIR      = Path(os.environ.get("DATA_DIR", "."))
 BASE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -54,6 +55,33 @@ logging.basicConfig(
     ]
 )
 log = logging.getLogger(__name__)
+
+# ── Chromium bootstrap (Railway) ─────────────────────────
+def _ensure_chromium():
+    """
+    Install Chromium jika belum ada di sistem (Railway/Linux tanpa Nix).
+    Hanya berjalan sekali saat startup.
+    """
+    candidates = [
+        "/run/current-system/sw/bin/chromium",
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+        "/usr/bin/google-chrome",
+    ]
+    if any(Path(p).exists() for p in candidates):
+        return  # sudah ada, skip
+
+    log.info("Chromium tidak ditemukan — mencoba install via apt...")
+    try:
+        subprocess.run(
+            ["apt-get", "install", "-y", "chromium", "chromium-driver"],
+            check=True, capture_output=True
+        )
+        log.info("Chromium berhasil diinstall via apt.")
+    except Exception as e:
+        log.warning(f"apt install chromium gagal: {e} — akan coba ChromeDriverManager.")
+
+_ensure_chromium()
 
 # ── FastAPI ───────────────────────────────────────────────
 app = FastAPI(title="TikTok Auto DM API")
@@ -123,29 +151,27 @@ class TikTokDMSender:
             "Chrome/120.0.0.0 Safari/537.36"
         )
 
-        # ── Cari Chromium binary di berbagai path (Railway/Nix/Docker/lokal) ──
-        CHROMIUM_CANDIDATES = [
-            "/run/current-system/sw/bin/chromium",       # Railway Nix
-            "/usr/bin/chromium",                          # Debian/Ubuntu
-            "/usr/bin/chromium-browser",                  # Ubuntu alt
-            "/usr/bin/google-chrome",                     # Chrome
-            "/usr/bin/google-chrome-stable",
-        ]
-        CHROMEDRIVER_CANDIDATES = [
-            "/run/current-system/sw/bin/chromedriver",
-            "/usr/bin/chromedriver",
-            "/usr/lib/chromium/chromedriver",
-            "/usr/lib/chromium-browser/chromedriver",
-        ]
+        # ── Deteksi Chromium via `which` (paling akurat di semua environment) ──
+        def _which(cmd):
+            try:
+                result = subprocess.run(
+                    ["which", cmd], capture_output=True, text=True, check=True
+                )
+                path = result.stdout.strip()
+                return path if path else None
+            except Exception:
+                return None
 
-        chromium_path    = next((p for p in CHROMIUM_CANDIDATES    if Path(p).exists()), None)
-        chromedriver_path = next((p for p in CHROMEDRIVER_CANDIDATES if Path(p).exists()), None)
+        chromium_path     = _which("chromium") or _which("chromium-browser") or _which("google-chrome") or _which("google-chrome-stable")
+        chromedriver_path = _which("chromedriver")
 
-        log.info(f"Chromium binary  : {chromium_path or 'NOT FOUND — pakai ChromeDriverManager'}")
-        log.info(f"ChromeDriver path: {chromedriver_path or 'NOT FOUND — pakai ChromeDriverManager'}")
-        job_status["log"].append(f"🔧 Chromium: {chromium_path or 'auto-detect via ChromeDriverManager'}")
+        log.info(f"Chromium binary  : {chromium_path or 'NOT FOUND'}")
+        log.info(f"ChromeDriver path: {chromedriver_path or 'NOT FOUND'}")
+        job_status["log"].append(f"Chromium: {chromium_path or 'NOT FOUND'}")
+        job_status["log"].append(f"ChromeDriver: {chromedriver_path or 'NOT FOUND'}")
 
         if chromium_path and chromedriver_path:
+            log.info("Menggunakan Chromium sistem (Railway/Linux mode)")
             options.binary_location = chromium_path
             service = Service(chromedriver_path)
         else:
@@ -273,7 +299,28 @@ class TikTokDMSender:
             )
             msg_box.click()
             time.sleep(1)
-            msg_box.send_keys(message)
+
+            # Gunakan JavaScript untuk set value — menghindari error BMP pada emoji
+            # send_keys() tidak support karakter di luar Unicode BMP (emoji 4-byte)
+            driver.execute_script(
+                """
+                const el = arguments[0];
+                const msg = arguments[1];
+                el.focus();
+                // Untuk contenteditable div (TikTok DM box)
+                if (el.isContentEditable) {
+                    el.innerText = msg;
+                    el.dispatchEvent(new Event('input', {bubbles: true}));
+                } else {
+                    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                        window.HTMLTextAreaElement.prototype, 'value'
+                    ).set;
+                    nativeInputValueSetter.call(el, msg);
+                    el.dispatchEvent(new Event('input', {bubbles: true}));
+                }
+                """,
+                msg_box, message
+            )
             time.sleep(1)
             msg_box.send_keys(Keys.RETURN)
             time.sleep(2)
