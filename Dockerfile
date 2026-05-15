@@ -24,19 +24,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN CHROME_MAJOR=$(google-chrome --version | grep -oP '\d+' | head -1) \
-    && DRIVER_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json" \
-        | python3 -c " \
-import sys, json; \
-data = json.load(sys.stdin); \
-major = '$CHROME_MAJOR'; \
-versions = [v for v in data['versions'] if v['version'].startswith(major + '.')]; \
-last = versions[-1] if versions else None; \
-dl = last and next((d['url'] for d in last['downloads'].get('chromedriver', []) if d['platform'] == 'linux64'), None); \
-print(dl or '') \
-    ") \
-    && wget -q "$DRIVER_URL" -O /tmp/chromedriver.zip \
+    && curl -s "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_${CHROME_MAJOR}" -o /tmp/driver_ver \
+    && DRIVER_VER=$(cat /tmp/driver_ver) \
+    && wget -q "https://storage.googleapis.com/chrome-for-testing-public/${DRIVER_VER}/linux64/chromedriver-linux64.zip" -O /tmp/chromedriver.zip \
     && unzip /tmp/chromedriver.zip -d /tmp/cd \
-    && find /tmp/cd -name "chromedriver" -exec mv {} /usr/local/bin/chromedriver \; \
+    && mv /tmp/cd/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver \
     && chmod +x /usr/local/bin/chromedriver \
     && rm -rf /tmp/chromedriver.zip /tmp/cd
 
